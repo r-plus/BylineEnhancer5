@@ -3,6 +3,9 @@
 
 #define PREF_PATH @"/var/mobile/Library/Preferences/jp.r-plus.bylineenhancer.plist"
 
+static BOOL markAllAsReading = NO;
+static void (^block)(UIAlertAction *action) = nil;
+
 // interfaces {{{
 @interface BLItemViewController : UIViewController
 @property(retain, nonatomic) UIWebView *webView;
@@ -32,6 +35,7 @@ static void DoPullToAction(int actionNumber)
                 // TODO: silently mark all as read.
 /*                for (BLNewsItem *item in UIApplication.sharedApplication.delegate.homeViewController.listViewController.newsList.items) {*/
 /*                }*/
+                markAllAsReading = YES;
                 [delegate.homeViewController.listViewController markAllAsReadAction:nil]; 
             }
             break;
@@ -51,6 +55,32 @@ static void DoPullToAction(int actionNumber)
             break;
     }
 }
+// }}}
+// {{{ hook for dont show UIAlertController for MarkAllasRead.
+%hook UIAlertAction
++ (id)actionWithTitle:(NSString *)title style:(UIAlertActionStyle)style handler:(void (^)(UIAlertAction *action))handler
+{
+    CMLog(@"actionWithTitle = '%@'", title);
+     if ([title isEqualToString:@"すべて既読にする"]) {
+        block = handler;
+    }
+    return %orig;
+}
+%end
+%hook UIViewController
+- (void)presentViewController:(UIViewController *)viewControllerToPresent animated:(BOOL)flag completion:(void (^)(void))completion
+{
+    CMLog(@"presentViewController");
+    if (block && markAllAsReading && [viewControllerToPresent isKindOfClass:[UIAlertController class]]) {
+        markAllAsReading = NO;
+        block(nil);
+        block = nil;
+        // skip present UIAlertController.
+        return;
+    }
+    %orig;
+}
+%end
 // }}}
 // folder hook {{{
 %hook BLListViewController
